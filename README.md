@@ -231,28 +231,69 @@ Faites preuve de pédagogie et soyez clair dans vos explications et procedures d
 **Exercice 1 :**  
 Quels sont les composants dont la perte entraîne une perte de données ?  
   
-*..Répondez à cet exercice ici..*
+Les composants critiques sont :
+
+Le PVC pra-data, car il contient la base de données SQLite utilisée par l’application.
+Le PVC pra-backup, car il contient les sauvegardes permettant de restaurer la base après un sinistre.
+Le nœud Kubernetes qui héberge physiquement les volumes, si le stockage local est perdu.
+
+La perte du pod Flask ne provoque pas de perte de données, car les données ne sont pas stockées dans le pod mais dans un volume persistant.v
 
 **Exercice 2 :**  
 Expliquez nous pourquoi nous n'avons pas perdu les données lors de la supression du PVC pra-data  
   
-*..Répondez à cet exercice ici..*
+Nous n’avons pas perdu définitivement les données car une sauvegarde de la base SQLite était réalisée automatiquement toutes les minutes vers le PVC pra-backup.
+
+Quand le PVC pra-data est supprimé, la base de production disparaît. Cependant, le PVC pra-backup existe toujours et contient une copie récente de la base. La restauration consiste donc à recréer un PVC pra-data vide, puis à recopier la dernière sauvegarde depuis pra-backup vers pra-data.
+
+La reprise n’est pas automatique : Kubernetes ne restaure pas les données tout seul. C’est la procédure de PRA qui permet de récupérer les données.
 
 **Exercice 3 :**  
 Quels sont les RTO et RPO de cette solution ?  
   
-*..Répondez à cet exercice ici..*
+Le RTO correspond au temps nécessaire pour remettre le service en fonctionnement après l’incident. Dans cette solution, il dépend du temps nécessaire pour recréer l’infrastructure, relancer l’application et exécuter le job de restauration. On peut l’estimer à quelques minutes.
+
+Le RPO correspond à la quantité maximale de données que l’on accepte de perdre. Comme les sauvegardes sont réalisées toutes les minutes, le RPO théorique est d’environ 1 minute.
+
+Cependant, ce RPO dépend du bon fonctionnement du CronJob de sauvegarde. Si le CronJob ne fonctionne plus ou si le PVC pra-backup est perdu, le RPO devient beaucoup plus important, voire infini si aucune sauvegarde exploitable n’existe.
 
 **Exercice 4 :**  
 Pourquoi cette solution (cet atelier) ne peux pas être utilisé dans un vrai environnement de production ? Que manque-t-il ?   
   
-*..Répondez à cet exercice ici..*
+Cette solution est pédagogique, mais elle n’est pas suffisante pour un environnement de production.
+
+Il manque notamment :
+
+Une base de données robuste et adaptée à la production, par exemple PostgreSQL ou MySQL, au lieu de SQLite.
+Une réplication des données sur plusieurs nœuds ou plusieurs zones.
+Un stockage externe fiable, et non uniquement local au cluster.
+Des sauvegardes externalisées hors du cluster, par exemple vers un stockage objet.
+Des tests réguliers de restauration.
+Une supervision des sauvegardes, de l’application et des volumes.
+Des alertes en cas d’échec du CronJob ou de perte de données.
+Une haute disponibilité réelle avec plusieurs replicas applicatifs.
+Une stratégie de sécurité : chiffrement, gestion des accès, secrets, droits Kubernetes.
+Une documentation complète de type runbook pour guider la restauration.
+
+Le principal problème est que les données et les sauvegardes restent dans le même environnement Kubernetes. Si le cluster entier est perdu, la sauvegarde peut être perdue aussi.
   
 **Exercice 5 :**  
 Proposez une archtecture plus robuste.   
   
-*..Répondez à cet exercice ici..*
+Une architecture plus robuste pourrait être composée des éléments suivants :
 
+Une application Flask déployée avec plusieurs replicas Kubernetes.
+Un service Kubernetes pour répartir le trafic vers les pods disponibles.
+Une base de données PostgreSQL managée ou déployée en haute disponibilité.
+Un stockage persistant répliqué entre plusieurs nœuds.
+Des sauvegardes régulières envoyées vers un stockage externe, par exemple S3, Azure Blob Storage ou Google Cloud Storage.
+Une réplication de la base de données vers une autre zone ou une autre région.
+Un système de supervision avec Prometheus et Grafana.
+Des alertes avec Alertmanager en cas d’échec de sauvegarde ou d’indisponibilité.
+Des tests réguliers de restauration pour vérifier que les sauvegardes sont réellement utilisables.
+Une procédure PRA documentée avec les étapes de restauration, les responsabilités, le RTO et le RPO attendus.
+
+Dans cette architecture, la perte d’un pod ou d’un nœud n’interrompt pas le service, car Kubernetes peut redémarrer les workloads ailleurs. La perte d’un volume local ne provoque pas non plus de perte définitive, car les données sont répliquées et sauvegardées hors du cluster.
 ---------------------------------------------------
 Séquence 6 : Ateliers  
 Difficulté : Moyenne (~2 heures)
